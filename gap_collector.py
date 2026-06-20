@@ -3,26 +3,30 @@ import time
 from datetime import datetime
 import os
 
-print("=== BTC Gap Collector 24/7 - Format compatible Tableur ===")
+print("=== BTC Gap Collector 24/7 - Avec Retry ===")
 
 CSV_FOLDER = "csv_data"
 os.makedirs(CSV_FOLDER, exist_ok=True)
 
 def get_binance_price():
-    try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        response = requests.get(url, timeout=10)
-        return float(response.json()["price"])
-    except:
-        return None
+    for attempt in range(3):
+        try:
+            url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+            response = requests.get(url, timeout=15)
+            return float(response.json()["price"])
+        except:
+            time.sleep(2)
+    return None
 
 def get_coingecko_price():
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-        response = requests.get(url, timeout=10)
-        return float(response.json()["bitcoin"]["usd"])
-    except:
-        return None
+    for attempt in range(3):
+        try:
+            url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+            response = requests.get(url, timeout=15)
+            return float(response.json()["bitcoin"]["usd"])
+        except:
+            time.sleep(2)
+    return None
 
 while True:
     now = datetime.now()
@@ -34,11 +38,9 @@ while True:
 
     if binance_price is not None and coingecko_price is not None:
         ecart = binance_price - coingecko_price
-        timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
         date_only = now.strftime("%Y-%m-%d")
         time_only = now.strftime("%H:%M:%S")
 
-        # Alerte (comme dans ton ancien script)
         if abs(ecart) <= 3:
             alerte = f"🚨 QUASI-ZÉRO ({int(abs(ecart))}$)"
         elif abs(ecart) <= 10:
@@ -46,7 +48,6 @@ while True:
         else:
             alerte = "Normal"
 
-        # Création du fichier avec en-tête si besoin
         if not os.path.exists(csv_file):
             with open(csv_file, "w", encoding="utf-8") as f:
                 f.write("Date,Heure,Binance,CoinGecko,Ecart,Alerte\n")
@@ -54,8 +55,8 @@ while True:
         with open(csv_file, "a", encoding="utf-8") as f:
             f.write(f"{date_only},{time_only},{binance_price},{coingecko_price},{ecart:.2f},{alerte}\n")
 
-        print(f"[{timestamp}] Écart : {ecart:.2f} $ | Alerte : {alerte}")
+        print(f"[{now}] Écart : {ecart:.2f} $ | Alerte : {alerte}")
     else:
-        print(f"[{now}] Erreur de récupération des prix")
+        print(f"[{now}] Erreur de récupération des prix (retry en cours...)")
 
-    time.sleep(30)  # 30 secondes
+    time.sleep(30)
